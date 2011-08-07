@@ -1,0 +1,50 @@
+#!/usr/bin/env ruby
+# -*- ruby -*-
+
+require 'rubygems'
+require 'bundler/setup'
+
+require 'uri'
+require 'nokogiri'
+require 'icalendar'
+require 'open-uri'
+require 'chronic'
+
+cal = Icalendar::Calendar.new
+
+days = 4..14
+
+days.each do |day|
+  url = "http://www.fringefestival.org/2011/schedule/?day=#{day}"
+  doc = Nokogiri::HTML(open(url))
+  uri = URI.parse(url)
+  
+  time = nil
+  
+  doc.css('#content > *').each do |node|
+    next unless node['class']
+    classes = node['class'].split(/\s+/)
+    if classes.include? 'schedule-separator'
+      time = Chronic.parse("2011-08-#{day} #{node.content}").to_datetime
+    elsif classes.include? 'schedule-show'
+      cal.event do
+        dtstart time
+        duration 'PT1H' # all fringe shows are one hour
+        
+        link = node.css('a').first
+        summary link.text
+        url (uri + link['href']).to_s
+
+        node.css('span').each do |span|
+          if span.text =~ /^by (.*)$/
+            description "#{link.text} #{span.text}"
+          elsif span.text =~ /^at (.*)$/
+            location $1
+          end
+        end
+      end
+    end
+  end
+end
+
+puts cal.to_ical
